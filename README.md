@@ -30,5 +30,5 @@ pip install -r requirements.txt
 
 ### 1. 프로젝트 클론 (Clone)
 ```bash
-git clone [https://github.com/](https://github.com/)[본인아이디]/jammin-ai.git
+git clone [https://github.com/](https://github.com/)[minho5253]/jammin-ai.git
 cd jammin-ai# jammin
