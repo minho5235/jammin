@@ -25,6 +25,18 @@ except:
     print(f"오류: {UI_PATH} 없음")
     sys.exit(1)
 
+
+# 교수님거에 접속
+"""conn = pymysql.connect(
+            host='bitnmeta2.synology.me',
+            user='iyrc',
+            passwd='Dodan1004!',
+            db='gemini_ai',
+            charset='utf8',
+            port=3307,
+            cursorclass=pymysql.cursors.DictCursor
+            )"""
+
 # --- DB 매니저 ---
 class DatabaseManager:
     def __init__(self):
