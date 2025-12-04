@@ -25,16 +25,14 @@ except:
     print(f"오류: {UI_PATH} 없음")
     sys.exit(1)
 
-
-# 교수님거에 접속
 """conn = pymysql.connect(
-            host='bitnmeta2.synology.me',
-            user='iyrc',
-            passwd='Dodan1004!',
-            db='gemini_ai',
-            charset='utf8',
-            port=3307,
-            cursorclass=pymysql.cursors.DictCursor
+                host='bitnmeta2.synology.me',
+                user='iyrc',
+                passwd='Dodan1004!',
+                db='gemini_ai',
+                charset='utf8',
+                port=3307,
+                cursorclass=pymysql.cursors.DictCursor
             )"""
 
 # --- DB 매니저 ---
@@ -63,7 +61,6 @@ class DatabaseManager:
             )
         """)
         
-        # 컬럼 존재 여부 확인 및 추가
         try:
             self.cursor.execute("SELECT title FROM chat_sessions LIMIT 1")
             self.cursor.fetchall()
@@ -111,10 +108,31 @@ class DatabaseManager:
         self.cursor.execute("SELECT id, title, created_at FROM chat_sessions ORDER BY id DESC")
         return self.cursor.fetchall()
 
+    def search_sessions(self, keyword):
+        """[검색 기능] 제목이나 내용에 키워드가 포함된 세션 찾기"""
+        if not self.conn: return []
+        # 제목이나 메시지 내용에 검색어가 포함된 방을 찾음
+        query = """
+            SELECT DISTINCT s.id, s.title, s.created_at 
+            FROM chat_sessions s
+            LEFT JOIN chat_messages m ON s.id = m.session_id
+            WHERE s.title LIKE %s OR m.content LIKE %s
+            ORDER BY s.id DESC
+        """
+        search_pattern = f"%{keyword}%"
+        self.cursor.execute(query, (search_pattern, search_pattern))
+        return self.cursor.fetchall()
+
     def get_messages(self, session_id):
         if not self.conn: return []
         self.cursor.execute("SELECT sender, content FROM chat_messages WHERE session_id = %s ORDER BY id ASC", (session_id,))
         return self.cursor.fetchall()
+
+    def update_session_title(self, session_id, title):
+        if not self.conn: return
+        self.cursor.execute("UPDATE chat_sessions SET title = %s WHERE id = %s", (title, session_id))
+        self.conn.commit()
+
 
 # --- 워커 스레드 ---
 class GeminiWorker(QThread):
@@ -137,8 +155,15 @@ class MainWindow(QMainWindow, form_class):
         super().__init__()
         self.setupUi(self)
         self.db = DatabaseManager()
-        self.current_session_id = None # None이면 아직 DB에 저장되지 않은 상태
+        self.current_session_id = None
         
+        # [수정됨] 검색 버튼(btn_search)과 엔터키에만 이벤트 연결
+        if hasattr(self, 'btn_search'):
+            self.btn_search.clicked.connect(self.run_search)
+        
+        if hasattr(self, 'search_input'):
+            self.search_input.returnPressed.connect(self.run_search)
+
         # UI 이벤트 연결
         self.btn_send.clicked.connect(self.send_message)
         self.input_text.returnPressed.connect(self.send_message)
@@ -152,10 +177,9 @@ class MainWindow(QMainWindow, form_class):
         if hasattr(self, 'btn_delete'):
             self.btn_delete.clicked.connect(self.delete_current_chat)
 
-        # 시작 시 목록 불러오기
+        # 시작 시 전체 목록 불러오기
         self.refresh_session_list()
         
-        # 만약 목록이 있으면 첫번째 채팅 선택, 없으면 빈 화면 시작
         if self.session_list.count() > 0:
             self.session_list.setCurrentRow(0)
             item = self.session_list.currentItem()
@@ -164,24 +188,40 @@ class MainWindow(QMainWindow, form_class):
             self.start_new_session_ui()
 
     def start_new_session_ui(self):
-        """DB 생성 없이 화면만 초기화 (메시지 보낼 때 생성됨)"""
         self.current_session_id = None
         self.chat_display.clear()
         self.chat_display.setHtml('<html><head/><body><p><span style=" font-size:18pt; font-weight:600; color:#444746;">안녕하세요, Jammin입니다.</span></p></body></html>')
         self.session_list.clearSelection()
-        self.statusbar.showMessage("새로운 대화 시작 (메시지를 입력하면 저장됩니다)")
+        self.statusbar.showMessage("새로운 대화 시작")
 
-    def refresh_session_list(self):
+    def run_search(self):
+        """검색 버튼 누르면 호출되는 함수"""
+        if not hasattr(self, 'search_input'): return
+        keyword = self.search_input.text().strip()
+        
+        if keyword:
+            print(f"🔍 검색 시작: {keyword}")
+            self.refresh_session_list(keyword) # 키워드 전달
+        else:
+            print("🔄 검색어 없음 -> 전체 목록 조회")
+            self.refresh_session_list() # 전체 조회
+
+    def refresh_session_list(self, keyword=None):
         if not hasattr(self, 'session_list'): return
         
-        # 현재 선택된 ID 기억
-        current_selected_id = None
-        if self.session_list.currentItem():
-            current_selected_id = self.session_list.currentItem().data(Qt.ItemDataRole.UserRole)
-
         self.session_list.clear()
-        sessions = self.db.get_all_sessions()
-        
+
+        # 키워드가 있으면 검색, 없으면 전체
+        if keyword:
+            sessions = self.db.search_sessions(keyword)
+        else:
+            sessions = self.db.get_all_sessions()
+
+        # 결과가 없으면 알림
+        if not sessions and keyword:
+            self.statusbar.showMessage(f"'{keyword}' 검색 결과가 없습니다.")
+            return
+
         for sess in sessions:
             s_id, s_title, s_date = sess
             if not s_title: s_title = "새로운 대화"
@@ -190,19 +230,13 @@ class MainWindow(QMainWindow, form_class):
             item.setData(Qt.ItemDataRole.UserRole, s_id) 
             self.session_list.addItem(item)
 
-            if s_id == current_selected_id:
-                item.setSelected(True)
-                self.session_list.setCurrentItem(item)
+        if keyword:
+            self.statusbar.showMessage(f"검색 결과: {len(sessions)}개")
 
     def delete_current_chat(self):
-        """현재 선택된 채팅방 삭제"""
         item = self.session_list.currentItem()
-        
-        # 선택된 게 없거나, 아직 저장도 안 된 '새 채팅' 화면일 경우
         if item is None or self.current_session_id is None:
-            self.statusbar.showMessage("삭제할 대화가 없거나 저장되지 않았습니다.")
-            # 화면만 초기화
-            self.start_new_session_ui()
+            self.statusbar.showMessage("삭제할 대화가 없습니다.")
             return
             
         session_id = item.data(Qt.ItemDataRole.UserRole)
@@ -213,20 +247,14 @@ class MainWindow(QMainWindow, form_class):
         
         if confirm == QMessageBox.StandardButton.Yes:
             if self.db.delete_session(session_id):
-                # 1. UI 목록에서 즉시 제거
                 self.session_list.takeItem(row)
-                
-                # 2. 삭제 후 다른 채팅방을 보여줄지 결정
                 if self.session_list.count() > 0:
-                    # 삭제된 위치가 마지막이었다면 그 앞엣놈, 아니면 그 뒷놈 선택
                     new_row = min(row, self.session_list.count() - 1)
                     next_item = self.session_list.item(new_row)
                     self.session_list.setCurrentItem(next_item)
-                    self.load_past_chat(next_item) # 그 채팅방 내용 로드
+                    self.load_past_chat(next_item)
                 else:
-                    # 다 지워서 남은 게 없으면 빈 화면(새 채팅)으로
                     self.start_new_session_ui()
-                
                 self.statusbar.showMessage("대화가 삭제되었습니다.")
             else:
                 QMessageBox.warning(self, "오류", "삭제에 실패했습니다.")
@@ -243,21 +271,19 @@ class MainWindow(QMainWindow, form_class):
         self.statusbar.showMessage(f"대화 불러옴 (ID: {session_id})")
 
     def reset_chat(self):
-        # '새로운 채팅' 버튼 누르면 빈 화면으로
         self.start_new_session_ui()
+        if hasattr(self, 'search_input'):
+            self.search_input.clear()
+            self.refresh_session_list() # 검색어 지웠으니 전체 목록 다시 보여주기
 
     def send_message(self):
         text = self.input_text.text()
         if not text.strip(): return
 
-        # [핵심 변경] 첫 메시지 전송 시점에 세션 생성 (Lazy Creation)
         if self.current_session_id is None:
             short_title = text[:15] + "..." if len(text) > 15 else text
-            # DB에 방 만들기
             self.current_session_id = self.db.create_session(short_title)
-            # 목록 갱신해서 방금 만든 방 보여주기
             self.refresh_session_list()
-            # 맨 위(방금 만든 방) 선택 상태로
             if self.session_list.count() > 0:
                 self.session_list.setCurrentRow(0)
         

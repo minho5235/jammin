@@ -80,6 +80,66 @@ border-right: 1px solid #e0e0e0;</string>
          </property>
         </widget>
        </item>
+       
+       <item>
+        <layout class="QHBoxLayout" name="search_layout">
+         <property name="spacing">
+          <number>5</number>
+         </property>
+         <item>
+          <widget class="QLineEdit" name="search_input">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>35</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">
+             QLineEdit {
+              background-color: #ffffff;
+              border: 1px solid #d1d9e0;
+              border-radius: 10px;
+              padding: 5px 10px;
+             }
+             QLineEdit:focus {
+              border: 1px solid #007bff;
+             }
+            </string>
+           </property>
+           <property name="placeholderText">
+            <string>검색어 입력...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btn_search">
+           <property name="minimumSize">
+            <size>
+             <width>40</width>
+             <height>35</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">
+             QPushButton {
+              background-color: #007bff;
+              border-radius: 10px;
+              color: white;
+              font-weight: bold;
+             }
+             QPushButton:hover {
+              background-color: #0056b3;
+             }
+            </string>
+           </property>
+           <property name="text">
+            <string>🔍</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item>
         <widget class="QPushButton" name="btn_delete">
          <property name="minimumSize">
