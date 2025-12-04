@@ -76,4 +76,8 @@ jammin-ai/
 ├── README.md           # 설명 파일
 └── requirements.txt    # 의존성 목록
 📝 License
+<<<<<<< HEAD
 This project is for educational purposes.
+=======
+This project is for educational purposes.
+>>>>>>> bd64c1835cb91aceae6384dadc82daf6991b2287
